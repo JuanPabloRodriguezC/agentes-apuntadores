@@ -26,8 +26,9 @@ vectorstore = PineconeVectorStore(
     index=index,
     embedding=embeddings,
     text_key="text",
-    namespace="parrafos"
+    namespace="frases"
 )
+
 
 # Initialize web search
 search_wrapper = DuckDuckGoSearchAPIWrapper()
@@ -60,7 +61,7 @@ def search_database(query: str) -> str:
 
     results = vectorstore.similarity_search_with_score(query, k=3)
     
-    if not results or results[0][1] > 0.5:
+    if not results or results[0][1] > 0.7:
         return "No se encontraron documentos relevantes en las notas de clase."
     
     # Format results with sources
@@ -101,9 +102,11 @@ def web_search(query: str) -> str:
         return f"Error al buscar en la web: {str(e)}"
 
 model = init_chat_model(
-    model="gpt-3.5-turbo",
+    model="gpt-4o-mini",
     model_provider="openai",
     temperature=0.3,
+    max_tokens=1024,
+    timeout=30,
 )
 
 checkpointer = InMemorySaver()
@@ -158,7 +161,7 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
                     })
             # Invoke agent with proper format
             response = agent.invoke(
-                {"messages": [{"role": "user", "content": langchain_messages}]},
+                {"messages": langchain_messages},
                 config={"configurable": {"thread_id": st.session_state.thread_id}}
             )
         
