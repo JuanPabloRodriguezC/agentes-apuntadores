@@ -45,16 +45,22 @@ Instrucciones importantes:
 2. SOLO usa 'web_search' si el usuario explícitamente pide buscar en internet
 3. Cuando uses información de search_database, SIEMPRE incluye las fuentes en tu respuesta
 4. Si no encuentras información relevante en las notas, dile al usuario
-5. Responde en español de manera clara y concisa"""
+5. Responde  clara y concisa
 
-# Define tools
+Formato de respuesta sugerido:
+[Tu respuesta aquí]
+
+Fuentes consultadas:
+- Archivo X, Página Y
+"""
+
 @tool
 def search_database(query: str) -> str:
     """Busca información en las notas de clase. Usa esta herramienta cuando el usuario pregunta sobre el contenido de las clases."""
-    
+
     results = vectorstore.similarity_search_with_score(query, k=3)
     
-    if not results or results[0][1] > 0.5:  # Lower score is better
+    if not results or results[0][1] > 0.5:
         return "No se encontraron documentos relevantes en las notas de clase."
     
     # Format results with sources
@@ -65,10 +71,19 @@ def search_database(query: str) -> str:
         
         # Create source citation
         source_info = f"\n**Fuente {i}:**"
-        if 'source' in metadata:
-            source_info += f" {metadata['source']}"
-        if 'page' in metadata:
-            source_info += f" (página {metadata['page']})"
+        if 'archivo' in metadata:
+            source_info += f"\n-Archivo: `{metadata['archivo']}`"   
+  
+        if 'pagina' in metadata:
+            source_info += f"\n-Página: {metadata['pagina']}"
+        
+        # Agregar fecha de procesado si existe
+        if 'fecha_procesado' in metadata:
+            source_info += f"\n-Procesado: {metadata['fecha_procesado']}"
+        
+        # Si hay origen (del archivo txt)
+        if 'origen' in metadata:
+            source_info += f"\n-Origen: {metadata['origen']}"
         
         formatted_results.append(f"{content}{source_info}")
     
@@ -85,18 +100,14 @@ def web_search(query: str) -> str:
     except Exception as e:
         return f"Error al buscar en la web: {str(e)}"
 
-
-# Initialize model
 model = init_chat_model(
     model="gpt-3.5-turbo",
     model_provider="openai",
     temperature=0.3,
 )
 
-# Create checkpointer for memory
 checkpointer = InMemorySaver()
 
-# Create agent
 agent = create_agent(
     model=model,
     tools=[search_database, web_search],
@@ -138,12 +149,19 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
         message_placeholder = st.empty()
         
         try:
+            langchain_messages = []
+            for msg in st.session_state.messages:
+                if msg["role"] in ["user", "assistant"]:
+                    langchain_messages.append({
+                        "role": msg["role"], 
+                        "content": msg["content"]
+                    })
             # Invoke agent with proper format
             response = agent.invoke(
-                {"messages": [{"role": "user", "content": prompt}]},
+                {"messages": [{"role": "user", "content": langchain_messages}]},
                 config={"configurable": {"thread_id": st.session_state.thread_id}}
             )
-            
+        
             # Extract the assistant's response
             # The response contains a 'messages' list, get the last message
             if "messages" in response:
@@ -158,7 +176,6 @@ if prompt := st.chat_input("Escribe tu pregunta aquí..."):
                 time.sleep(0.03)
                 message_placeholder.markdown(displayed_response + "▌")
             
-            # Final response without cursor
             message_placeholder.markdown(full_response)
             
         except Exception as e:
